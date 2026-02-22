@@ -34,4 +34,175 @@
     .card{
       background:var(--card);
       border:1px solid rgba(255,255,255,.7);
-      border-radius
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+    .header{
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      align-items:center;
+      text-align:center;
+    }
+    .title-img{
+      width:100%;
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow: 0 10px 26px rgba(0,0,0,.12);
+    }
+    .title-img img{ width:100%; height:auto; display:block; }
+
+    .btns{
+      display:flex;
+      gap:10px;
+      width:100%;
+      padding:0 14px 14px;
+    }
+    button{
+      appearance:none;
+      border:none;
+      border-radius:14px;
+      padding:14px 16px;
+      font-weight:700;
+      font-size:16px;
+      cursor:pointer;
+      box-shadow: 0 10px 24px rgba(0,0,0,.12);
+      transition: transform .06s ease, opacity .15s ease;
+      width:100%;
+    }
+    button:active{transform: translateY(1px) scale(.99)}
+    .primary{ background: linear-gradient(135deg, #ffbfde, #ffd88b); }
+    .ghost{ background: rgba(255,255,255,.75); }
+
+    .result{
+      padding:14px;
+      border-top:1px solid rgba(0,0,0,.06);
+      display:none;
+      gap:12px;
+    }
+    .result.show{display:grid}
+    .result-img{
+      width:100%;
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow: 0 10px 26px rgba(0,0,0,.12);
+      background:#fff;
+    }
+    .result-img img{ width:100%; height:auto; display:block; }
+
+    .result-text{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      padding:4px 2px 0;
+    }
+    .badge{
+      display:inline-flex;
+      align-self:flex-start;
+      gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      background: rgba(255,255,255,.7);
+      border:1px solid rgba(0,0,0,.06);
+      font-weight:800;
+    }
+    .hitokoto{
+      font-size:18px;
+      line-height:1.5;
+      font-weight:800;
+    }
+    .note{
+      font-size:12px;
+      opacity:.75;
+      line-height:1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="wrap">
+    <section class="card">
+      <div class="header">
+        <div class="title-img">
+          <img src="images/00_hyoudai.png" alt="チャッピーとサリーのおみくじ 表紙" />
+        </div>
+      </div>
+
+      <div class="btns">
+        <button class="primary" id="drawBtn" type="button">おみくじを引く ✨</button>
+        <button class="ghost" id="resetBtn" type="button">最初に戻る</button>
+      </div>
+
+      <div class="result" id="result">
+        <div class="result-img">
+          <img id="resultImage" src="" alt="おみくじ結果" />
+        </div>
+        <div class="result-text">
+          <div class="badge" id="resultLabel">結果</div>
+          <div class="hitokoto" id="hitokoto"></div>
+          <div class="note">
+            ※確率：うまく行く3%／大大吉6%／凶6%／他は均等（各17%）
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // 画像ファイル名（いまGitHubにある名前に合わせてる）
+    const OMJK = [
+      { key: "umakuiku", label: "うまく行く", img: "images/08_umakuiku.png", hitokoto: "うふふ。今日はスルッとうまくいく日だよ😎✨", w: 3 },
+      { key: "daidaikichi", label: "大大吉", img: "images/01_daiddaikichi.png", hitokoto: "受け取りMAX！遠慮なしで行こう〜🌈💖", w: 6 },
+      { key: "kyo", label: "凶", img: "images/07_kyo.png", hitokoto: "だいじょぶ。今日は守りの日！ゆっくり整えよ🐾", w: 6 },
+      { key: "daikichi", label: "大吉", img: "images/02_daikichi.png", hitokoto: "いい波きてるよ！小さく動くほど開く✨", w: 17 },
+      { key: "chukichi", label: "中吉", img: "images/03_chukichi.png", hitokoto: "コツコツが勝ち！今日の積み重ねが宝になるよ💎", w: 17 },
+      { key: "shokichi", label: "小吉", img: "images/04_shokichi.png", hitokoto: "ちいさなラッキーが見つかる日🍀", w: 17 },
+      { key: "kichi", label: "吉", img: "images/05_kichi.png", hitokoto: "安定の吉！自分のペースでOK😊", w: 17 },
+      { key: "suekichi", label: "末吉", img: "images/06_suekichi.png", hitokoto: "ゆっくり上がる運！焦らず育てると大当たり🎯", w: 17 },
+    ];
+
+    const drawBtn = document.getElementById("drawBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const result = document.getElementById("result");
+    const resultImage = document.getElementById("resultImage");
+    const resultLabel = document.getElementById("resultLabel");
+    const hitokoto = document.getElementById("hitokoto");
+
+    function weightedPick(items){
+      const total = items.reduce((s, x) => s + x.w, 0);
+      let r = Math.random() * total;
+      for (const it of items){
+        r -= it.w;
+        if (r <= 0) return it;
+      }
+      return items[items.length - 1];
+    }
+
+    function showResult(data){
+      resultImage.src = data.img;
+      resultLabel.textContent = data.label;
+      hitokoto.textContent = data.hitokoto;
+      result.classList.add("show");
+      result.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function reset(){
+      result.classList.remove("show");
+      resultImage.src = "";
+      resultLabel.textContent = "結果";
+      hitokoto.textContent = "";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    drawBtn.addEventListener("click", () => {
+      const picked = weightedPick(OMJK);
+      showResult(picked);
+    });
+
+    resetBtn.addEventListener("click", reset);
+  </script>
+</body>
+</html>
