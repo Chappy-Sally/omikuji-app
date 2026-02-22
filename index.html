@@ -119,6 +119,31 @@
       opacity:.75;
       line-height:1.5;
     }
+/* 凶：プルッと揺れる */
+.shake {
+  animation: shake 0.4s ease;
+}
+
+@keyframes shake {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+
+/* レア：キラキラ */
+.sparkle {
+  position: relative;
+  animation: glow 0.8s ease;
+}
+
+@keyframes glow {
+  0% { box-shadow: 0 0 0px gold; }
+  50% { box-shadow: 0 0 25px gold; }
+  100% { box-shadow: 0 0 0px gold; }
+}
   </style>
 </head>
 
@@ -179,11 +204,27 @@
     }
 
     function showResult(data){
-      resultImage.src = data.img;
-      resultLabel.textContent = data.label;
-      hitokoto.textContent = data.hitokoto;
-      result.classList.add("show");
-      result.scrollIntoView({ behavior: "smooth", block: "start" });
+  resultImage.src = data.img;
+  resultLabel.textContent = data.label;
+  hitokoto.textContent = data.hitokoto;
+
+  result.classList.add("show");
+
+  // いったん効果をリセット
+  resultImage.classList.remove("shake");
+  resultImage.classList.remove("sparkle");
+
+  // 凶ならプルッ
+  if (data.key === "kyo") {
+    resultImage.classList.add("shake");
+  }
+
+  // 大大吉 or うまく行くならキラキラ
+  if (data.key === "daidaikichi" || data.key === "umakuiku") {
+    resultImage.classList.add("sparkle");
+  }
+
+  result.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     function reset(){
