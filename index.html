@@ -85,14 +85,37 @@
       gap:12px;
     }
     .result.show{ display:grid }
+
     .result-img{
       width:100%;
       border-radius:14px;
       overflow:hidden;
       box-shadow: 0 10px 26px rgba(0,0,0,.12);
       background:#fff;
+      position:relative; /* FX重ねるため */
     }
     .result-img img{ width:100%; height:auto; display:block; }
+
+    /* エフェクト画像（上に重ねる） */
+    .fx{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      pointer-events:none;
+      opacity:0;
+      z-index:2;
+    }
+    .fx.show{
+      animation: fxFlash .55s ease forwards;
+    }
+    @keyframes fxFlash{
+      0%   {opacity:0; transform:scale(.98);}
+      35%  {opacity:1; transform:scale(1);}
+      100% {opacity:0; transform:scale(1.02);}
+    }
+
     .result-text{
       display:flex;
       flex-direction:column;
@@ -115,10 +138,10 @@
       font-weight:800;
     }
 
-    /* 裏話（確率表示）は“見えない”ように */
+    /* 裏話（確率表示）は秘密🤫 */
     .note{ display:none; }
 
-    /* 震え（凶） */
+    /* 凶：ちょいブルブル */
     .shake{
       animation: shake .45s ease-in-out 1;
     }
@@ -130,77 +153,6 @@
       60%{ transform: translateX(5px) rotate(.2deg) }
       75%{ transform: translateX(-3px) }
       90%{ transform: translateX(3px) }
-    }
-
-    /* ==== FXレイヤー ==== */
-    #fx{
-      position:fixed;
-      inset:0;
-      pointer-events:none;
-      z-index:9999;
-      overflow:hidden;
-    }
-
-    /* ピカッ（共通フラッシュ） */
-    #flash{
-      position:absolute;
-      inset:0;
-      background: rgba(255,255,255,.0);
-      opacity:0;
-    }
-    #flash.on{
-      animation: flash .25s ease;
-    }
-    @keyframes flash{
-      0%{ opacity:0 }
-      35%{ opacity:.95 }
-      100%{ opacity:0 }
-    }
-
-    /* 🎉パーティクル */
-    .p{
-      position:absolute;
-      top:-10vh;
-      font-size:26px;
-      will-change: transform, opacity;
-      filter: drop-shadow(0 8px 14px rgba(0,0,0,.15));
-      opacity:0;
-    }
-    .p.go{
-      opacity:1;
-      animation: fall var(--dur) ease-in forwards;
-    }
-    @keyframes fall{
-      0%{
-        transform: translate(var(--x), -10vh) rotate(0deg) scale(1);
-        opacity:0;
-      }
-      10%{ opacity:1; }
-      100%{
-        transform: translate(calc(var(--x) + var(--drift)), 110vh) rotate(var(--rot)) scale(.95);
-        opacity:0;
-      }
-    }
-
-    /* ⚡️稲妻（凶の前） */
-    #bolt{
-  position:absolute;
-  left:50%;
-  top:0;
-  width:min(480px, 95vw);
-  height:110vh;
-  transform: translateX(-50%);
-  opacity:0;
-  visibility:hidden;   /* ←これ足す */
-    }
-    #bolt.on{
-  visibility:visible;  /* ←これ足す */
-  animation: bolt .35s ease;
-    }
-    @keyframes bolt{
-      0%{ opacity:0; transform: translateX(-50%) translateY(-10px) scaleY(.92); }
-      35%{ opacity:1; }
-      100%{ opacity:0; transform: translateX(-50%) translateY(10px) scaleY(1.02); }
     }
   </style>
 </head>
@@ -221,8 +173,14 @@
 
       <div class="result" id="result">
         <div class="result-img">
+          <!-- FX（上に重ねる） -->
+          <img id="happyFx" class="fx" src="images/happy_fx.png" alt="" aria-hidden="true">
+          <img id="boltFx" class="fx" src="images/bolt_fx.png" alt="" aria-hidden="true">
+
+          <!-- 結果（下） -->
           <img id="resultImage" src="" alt="おみくじ結果" />
         </div>
+
         <div class="result-text">
           <div class="badge" id="resultLabel">結果</div>
           <div class="hitokoto" id="hitokoto"></div>
@@ -232,40 +190,6 @@
     </section>
   </main>
 
-  <!-- FX -->
-  <div id="fx">
-    <div id="flash"></div>
-
-    <!-- 稲妻SVG（凶用） -->
-    <svg id="bolt" viewBox="0 0 200 800" preserveAspectRatio="none" aria-hidden="true">
-      <defs>
-        <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
-          <stop offset="0.35" stop-color="#fff6b7" stop-opacity="0.95"/>
-          <stop offset="1" stop-color="#ffffff" stop-opacity="0.0"/>
-        </linearGradient>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="3" result="b"/>
-          <feMerge>
-            <feMergeNode in="b"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      <path filter="url(#glow)" fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"
-        d="M105 0
-           L80 90
-           L125 150
-           L70 250
-           L120 330
-           L85 420
-           L130 520
-           L75 640
-           L120 720
-           L95 800" />
-    </svg>
-  </div>
-
   <script>
     const drawBtn = document.getElementById("drawBtn");
     const resetBtn = document.getElementById("resetBtn");
@@ -274,21 +198,20 @@
     const resultLabel = document.getElementById("resultLabel");
     const hitokoto = document.getElementById("hitokoto");
 
-    // FX
-    const fx = document.getElementById("fx");
-    const flash = document.getElementById("flash");
-    const bolt = document.getElementById("bolt");
+    // FX images
+    const happyFx = document.getElementById("happyFx");
+    const boltFx  = document.getElementById("boltFx");
 
-    // おみくじデータ
+    // おみくじデータ（確率はここで管理）
     const OM = [
-      { key:"umakuiku", label:"うまく行く", img:"images/08_umakuiku.png", text:"うまくいく予感！流れに乗ってOK😊" , w: 3 },
-      { key:"daidaikichi", label:"大大吉", img:"images/01_daidaikichi.png", text:"大大吉！受け取りMAXでいこう✨" , w: 6 },
-      { key:"kyo", label:"凶", img:"images/07_kyo.png", text:"凶…でも大丈夫！切り替えたら勝ち🤣" , w: 6 },
+      { key:"umakuiku",   label:"うまく行く", img:"images/08_umakuiku.png",   text:"うまくいく予感！流れに乗ってOK😊" , w: 3 },
+      { key:"daidaikichi",label:"大大吉",     img:"images/01_daidaikichi.png", text:"大大吉！受け取りMAXでいこう✨"     , w: 6 },
+      { key:"kyo",        label:"凶",         img:"images/07_kyo.png",         text:"凶…でも大丈夫！切り替えたら勝ち🤣" , w: 6 },
 
       { key:"daikichi", label:"大吉", img:"images/02_daikichi.png", text:"大吉！素直に進めばいい感じ🌈" , w: 17 },
       { key:"chukichi", label:"中吉", img:"images/03_chukichi.png", text:"中吉！焦らずコツコツが最強👍" , w: 17 },
       { key:"shokichi", label:"小吉", img:"images/04_shokichi.png", text:"小吉！小さなラッキー見つけよ🍀" , w: 17 },
-      { key:"kichi", label:"吉", img:"images/05_kichi.png", text:"安定の吉！自分のペースでOK😊" , w: 17 },
+      { key:"kichi",    label:"吉",   img:"images/05_kichi.png",    text:"安定の吉！自分のペースでOK😊" , w: 17 },
       { key:"suekichi", label:"末吉", img:"images/06_suekichi.png", text:"末吉！あと一歩で良い流れくるよ✨" , w: 17 },
     ];
 
@@ -302,86 +225,51 @@
       return list[list.length-1];
     }
 
-    function doFlash(){
-      flash.classList.remove("on");
-      void flash.offsetWidth;
-      flash.classList.add("on");
-    }
-
-    // 🎉（大大吉＆うまく行く）用：パーティクル生成
-    function partyPop(){
-      // まずピカッ
-      doFlash();
-
-      // 既存パーティクル掃除
-      fx.querySelectorAll(".p").forEach(n => n.remove());
-
-      const icons = ["🎉","✨","💫","🌈","⭐️"];
-      const n = 22;
-
-      for(let i=0;i<n;i++){
-        const s = document.createElement("span");
-        s.className = "p";
-        s.textContent = icons[Math.floor(Math.random()*icons.length)];
-
-        const x = (Math.random()*100).toFixed(2) + "vw";
-        const drift = ((Math.random()*160)-80).toFixed(0) + "px";
-        const rot = ((Math.random()*720)-360).toFixed(0) + "deg";
-        const dur = (0.9 + Math.random()*0.8).toFixed(2) + "s";
-
-        s.style.setProperty("--x", x);
-        s.style.setProperty("--drift", drift);
-        s.style.setProperty("--rot", rot);
-        s.style.setProperty("--dur", dur);
-
-        fx.appendChild(s);
-        // ちょい遅れで落下開始
-        requestAnimationFrame(()=> s.classList.add("go"));
-      }
-
-      // 後片付け
-      setTimeout(()=> fx.querySelectorAll(".p").forEach(n => n.remove()), 2200);
-    }
-
-    // ⚡️（凶）用：稲妻→ピカッ→ブルブル
-    function kyoFx(){
-      // 稲妻
-      bolt.classList.remove("on");
-      void bolt.offsetWidth;
-      bolt.classList.add("on");
-
-      // 稲妻の後にピカッ
-      setTimeout(()=> doFlash(), 120);
-
-      // 最後にブルブル（画像）
-      setTimeout(()=>{
-        resultImage.classList.remove("shake");
-        void resultImage.offsetWidth;
-        resultImage.classList.add("shake");
-      }, 220);
+    function playFx(el){
+      el.classList.remove("show");
+      void el.offsetWidth; // 連続でも毎回発火
+      el.classList.add("show");
     }
 
     function clearFx(){
-      bolt.classList.remove("on");
-      flash.classList.remove("on");
-      fx.querySelectorAll(".p").forEach(n => n.remove());
+      happyFx.classList.remove("show");
+      boltFx.classList.remove("show");
       resultImage.classList.remove("shake");
+      resultImage.style.visibility = "visible";
     }
 
     function showResult(data){
       clearFx();
 
+      // 先に結果をセット
       resultImage.src = data.img;
       resultLabel.textContent = data.label;
       hitokoto.textContent = data.text;
 
       result.classList.add("show");
 
-      // 仕様：大大吉＆うまく行く＝🎉ピカッ / 凶＝⚡️→ピカッ→ブルブル
-      if(data.key === "daidaikichi" || data.key === "umakuiku"){
-        partyPop();
-      }else if(data.key === "kyo"){
-        kyoFx();
+      // 2枚連続表示：演出→カード
+      if (data.key === "kyo"){
+        // ⚡ → 凶
+        resultImage.style.visibility = "hidden";
+        playFx(boltFx);
+
+        setTimeout(()=>{
+          resultImage.style.visibility = "visible";
+          // おまけ：凶だけブルブル
+          resultImage.classList.remove("shake");
+          void resultImage.offsetWidth;
+          resultImage.classList.add("shake");
+        }, 550);
+
+      } else if (data.key === "daidaikichi" || data.key === "umakuiku"){
+        // ✨ → カード
+        resultImage.style.visibility = "hidden";
+        playFx(happyFx);
+
+        setTimeout(()=>{
+          resultImage.style.visibility = "visible";
+        }, 550);
       }
     }
 
@@ -396,7 +284,6 @@
       resultImage.src = "";
       resultLabel.textContent = "結果";
       hitokoto.textContent = "";
-      // 上に戻す
       window.scrollTo({top:0, behavior:"smooth"});
     });
   </script>
