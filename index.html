@@ -154,7 +154,7 @@
       100%{opacity:0}
     }
 
-    /* FX画像 */
+    /* FX画像（紙吹雪/稲妻） */
     .fximg{
       position:absolute;
       left:50%;
@@ -208,7 +208,7 @@
   <div id="fx" aria-hidden="true">
     <div id="flash"></div>
 
-    <!-- ★ここだけファイル名をあなたの実名に合わせて -->
+    <!-- ここは実ファイル名に合わせる -->
     <img id="happyFx" class="fximg" src="images/happy_fx.png" alt="" decoding="async" loading="eager" />
     <img id="boltFx"  class="fximg" src="images/bolt_fx.png"  alt="" decoding="async" loading="eager" />
   </div>
@@ -227,16 +227,17 @@
 
     let fxTimer = null;
 
+    // おみくじデータ（ここは画像名が正しいか超重要！）
     const OM = [
-      { key:"umakuiku",   label:"うまく行く", img:"images/08_umakuiku.png",   text:"うまくいく予感！流れに乗ってOK😊", w:3 },
-      { key:"daidaikichi",label:"大大吉",     img:"images/01_daidaikichi.png",text:"大大吉！受け取りMAXでいこう✨", w:6 },
-      { key:"kyo",        label:"凶",         img:"images/07_kyo.png",        text:"凶…でも大丈夫！切り替えたら勝ち🤣", w:6 },
+      { key:"umakuiku",    label:"うまく行く", img:"images/08_umakuiku.png",    text:"うまくいく予感！流れに乗ってOK😊", w:3 },
+      { key:"daidaikichi", label:"大大吉",     img:"images/01_daidaikichi.png", text:"大大吉！受け取りMAXでいこう✨",     w:6 },
+      { key:"kyo",         label:"凶",         img:"images/07_kyo.png",         text:"凶…でも大丈夫！切り替えたら勝ち🤣", w:6 },
 
-      { key:"daikichi",   label:"大吉", img:"images/02_daikichi.png", text:"大吉！素直に進めばいい感じ🌈", w:17 },
-      { key:"chukichi",   label:"中吉", img:"images/03_chukichi.png", text:"中吉！焦らずコツコツが最強👍", w:17 },
-      { key:"shokichi",   label:"小吉", img:"images/04_shokichi.png", text:"小吉！小さなラッキー見つけよ🍀", w:17 },
-      { key:"kichi",      label:"吉",   img:"images/05_kichi.png",    text:"安定の吉！自分のペースでOK😊", w:17 },
-      { key:"suekichi",   label:"末吉", img:"images/06_suekichi.png", text:"末吉！あと一歩で良い流れくるよ✨", w:17 },
+      { key:"daikichi", label:"大吉", img:"images/02_daikichi.png", text:"大吉！素直に進めばいい感じ🌈", w:17 },
+      { key:"chukichi", label:"中吉", img:"images/03_chukichi.png", text:"中吉！焦らずコツコツが最強👍", w:17 },
+      { key:"shokichi", label:"小吉", img:"images/04_shokichi.png", text:"小吉！小さなラッキー見つけよ🍀", w:17 },
+      { key:"kichi",    label:"吉",   img:"images/05_kichi.png",    text:"安定の吉！自分のペースでOK😊", w:17 },
+      { key:"suekichi", label:"末吉", img:"images/06_suekichi.png", text:"末吉！あと一歩で良い流れくるよ✨", w:17 },
     ];
 
     function weightedPick(list){
@@ -255,43 +256,50 @@
       flash.classList.add("on");
     }
 
-    function playFx(el){
-      el.classList.remove("on");
-      void el.offsetWidth;
-      el.classList.add("on");
+    function playFx(imgEl){
+      // 同じ演出を連続で出しても確実に再生させる
+      imgEl.classList.remove("on");
+      void imgEl.offsetWidth;
+      imgEl.classList.add("on");
     }
 
-    function clearFx(){
-      if (fxTimer) { clearTimeout(fxTimer); fxTimer = null; }
+    function stopFx(){
+      if (fxTimer) {
+        clearTimeout(fxTimer);
+        fxTimer = null;
+      }
       flash.classList.remove("on");
       happyFx.classList.remove("on");
       boltFx.classList.remove("on");
       resultImage.classList.remove("shake");
       resultImage.style.visibility = "visible";
+      drawBtn.disabled = false;
     }
 
+    // ★ここが本体：2枚連続表示（演出→カード）
     function showResult(data){
-      clearFx();
+      stopFx();
 
-      // 結果はセットするけど、演出が終わるまで「結果エリア全体」を隠す
-      resultImage.src = data.img;
+      // 結果をセット（先に文字が出るのはここで解決）
       resultLabel.textContent = data.label;
       hitokoto.textContent = data.text;
+      resultImage.src = data.img;
 
-      // ここがポイント：先に見える事故を防ぐ
-      result.classList.remove("show");   // いったん非表示に戻す
+      result.classList.add("show");
 
+      // 連打で壊れないようにロック
       drawBtn.disabled = true;
 
-      // 演出 → 650ms後に結果表示
       if (data.key === "kyo"){
-        // ⚡ → ピカッ → 結果（ブルブル）
+        // ⚡ → ピカッ → 凶カード（ブルブル）
+        resultImage.style.visibility = "hidden";
         playFx(boltFx);
-        setTimeout(()=> doFlash(), 120);
+        doFlash();
 
         fxTimer = setTimeout(()=>{
-          result.classList.add("show");
+          resultImage.style.visibility = "visible";
 
+          // ブルブルを毎回確実に再発火
           resultImage.classList.remove("shake");
           void resultImage.offsetWidth;
           resultImage.classList.add("shake");
@@ -300,18 +308,18 @@
         }, 650);
 
       } else if (data.key === "daidaikichi" || data.key === "umakuiku"){
-        // 🎉 → ピカッ → 結果
+        // 🎉 → ピカッ → カード
+        resultImage.style.visibility = "hidden";
         playFx(happyFx);
-        setTimeout(()=> doFlash(), 100);
+        doFlash();
 
         fxTimer = setTimeout(()=>{
-          result.classList.add("show");
+          resultImage.style.visibility = "visible";
           drawBtn.disabled = false;
         }, 650);
 
       } else {
-        // 通常：すぐ表示
-        result.classList.add("show");
+        // 通常：すぐ操作OK
         drawBtn.disabled = false;
       }
     }
@@ -322,7 +330,7 @@
     });
 
     resetBtn.addEventListener("click", ()=>{
-      clearFx();
+      stopFx();
       result.classList.remove("show");
       resultImage.src = "";
       resultLabel.textContent = "結果";
@@ -330,11 +338,15 @@
       window.scrollTo({top:0, behavior:"smooth"});
     });
 
-    // 先読み（FXが出たり出なかったり問題を潰す）
+    // 先読み（出たり出なかったり対策）
     window.addEventListener("load", ()=>{
       [happyFx.src, boltFx.src].forEach(src=>{
         const im = new Image();
         im.src = src;
+      });
+      OM.forEach(o=>{
+        const im = new Image();
+        im.src = o.img;
       });
     });
   </script>
