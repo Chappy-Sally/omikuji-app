@@ -75,6 +75,7 @@
       width:100%;
     }
     button:active{ transform: translateY(1px) scale(.99) }
+    button:disabled{ opacity:.65; cursor:not-allowed; }
     .primary{ background: linear-gradient(135deg, #ffbfde, #ffd88b); }
     .ghost{ background: rgba(255,255,255,.75); }
 
@@ -85,37 +86,14 @@
       gap:12px;
     }
     .result.show{ display:grid }
-
     .result-img{
       width:100%;
       border-radius:14px;
       overflow:hidden;
       box-shadow: 0 10px 26px rgba(0,0,0,.12);
       background:#fff;
-      position:relative; /* FX重ねるため */
     }
     .result-img img{ width:100%; height:auto; display:block; }
-
-    /* エフェクト画像（上に重ねる） */
-    .fx{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      object-fit:contain;
-      pointer-events:none;
-      opacity:0;
-      z-index:2;
-    }
-    .fx.show{
-      animation: fxFlash .55s ease forwards;
-    }
-    @keyframes fxFlash{
-      0%   {opacity:0; transform:scale(.98);}
-      35%  {opacity:1; transform:scale(1);}
-      100% {opacity:0; transform:scale(1.02);}
-    }
-
     .result-text{
       display:flex;
       flex-direction:column;
@@ -138,13 +116,11 @@
       font-weight:800;
     }
 
-    /* 裏話（確率表示）は秘密🤫 */
+    /* 裏話（確率表示）は非表示 */
     .note{ display:none; }
 
-    /* 凶：ちょいブルブル */
-    .shake{
-      animation: shake .45s ease-in-out 1;
-    }
+    /* 凶：ブルブル */
+    .shake{ animation: shake .45s ease-in-out 1; }
     @keyframes shake{
       0%,100%{ transform: translateX(0) }
       15%{ transform: translateX(-6px) rotate(-.3deg) }
@@ -153,6 +129,50 @@
       60%{ transform: translateX(5px) rotate(.2deg) }
       75%{ transform: translateX(-3px) }
       90%{ transform: translateX(3px) }
+    }
+
+    /* ===== FX（画面上に重ねる） ===== */
+    #fx{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index:9999;
+      overflow:hidden;
+    }
+
+    /* ピカッ（共通） */
+    #flash{
+      position:absolute;
+      inset:0;
+      background:#fff;
+      opacity:0;
+    }
+    #flash.on{ animation: flash .25s ease; }
+    @keyframes flash{
+      0%{opacity:0}
+      35%{opacity:.95}
+      100%{opacity:0}
+    }
+
+    /* FX画像（🎉 / ⚡️） */
+    .fximg{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:min(520px, 96vw);
+      transform: translate(-50%,-50%) scale(.98);
+      opacity:0;
+      visibility:hidden;
+      filter: drop-shadow(0 12px 28px rgba(0,0,0,.18));
+    }
+    .fximg.on{
+      visibility:visible;
+      animation: fxpop .55s ease forwards;
+    }
+    @keyframes fxpop{
+      0%{ opacity:0; transform:translate(-50%,-50%) scale(.92); }
+      35%{ opacity:1; transform:translate(-50%,-50%) scale(1.02); }
+      100%{ opacity:0; transform:translate(-50%,-50%) scale(1.06); }
     }
   </style>
 </head>
@@ -173,14 +193,8 @@
 
       <div class="result" id="result">
         <div class="result-img">
-          <!-- FX（上に重ねる） -->
-          <img id="happyFx" class="fx" src="images/happy_fx.png" alt="" aria-hidden="true">
-          <img id="boltFx" class="fx" src="images/bolt_fx.png" alt="" aria-hidden="true">
-
-          <!-- 結果（下） -->
           <img id="resultImage" src="" alt="おみくじ結果" />
         </div>
-
         <div class="result-text">
           <div class="badge" id="resultLabel">結果</div>
           <div class="hitokoto" id="hitokoto"></div>
@@ -190,6 +204,17 @@
     </section>
   </main>
 
+  <!-- FX layer -->
+  <div id="fx" aria-hidden="true">
+    <div id="flash"></div>
+
+    <!-- ★ここが大事：あなたがアップした画像ファイル名に合わせてね -->
+    <!-- 例：紙吹雪/キラキラ演出 -->
+    <img id="happyFx" class="fximg" src="images/fx_happy.png" alt="" />
+    <!-- 例：稲妻/⚡演出 -->
+    <img id="boltFx" class="fximg" src="images/fx_bolt.png" alt="" />
+  </div>
+
   <script>
     const drawBtn = document.getElementById("drawBtn");
     const resetBtn = document.getElementById("resetBtn");
@@ -198,21 +223,24 @@
     const resultLabel = document.getElementById("resultLabel");
     const hitokoto = document.getElementById("hitokoto");
 
-    // FX images
+    // FX
+    const flash = document.getElementById("flash");
     const happyFx = document.getElementById("happyFx");
-    const boltFx  = document.getElementById("boltFx");
+    const boltFx = document.getElementById("boltFx");
 
-    // おみくじデータ（確率はここで管理）
+    let fxTimer = null;
+
+    // おみくじデータ
     const OM = [
-      { key:"umakuiku",   label:"うまく行く", img:"images/08_umakuiku.png",   text:"うまくいく予感！流れに乗ってOK😊" , w: 3 },
-      { key:"daidaikichi",label:"大大吉",     img:"images/01_daidaikichi.png", text:"大大吉！受け取りMAXでいこう✨"     , w: 6 },
-      { key:"kyo",        label:"凶",         img:"images/07_kyo.png",         text:"凶…でも大丈夫！切り替えたら勝ち🤣" , w: 6 },
+      { key:"umakuiku",   label:"うまく行く", img:"images/08_umakuiku.png",   text:"うまくいく予感！流れに乗ってOK😊", w:3 },
+      { key:"daidaikichi",label:"大大吉",     img:"images/01_daidaikichi.png",text:"大大吉！受け取りMAXでいこう✨", w:6 },
+      { key:"kyo",        label:"凶",         img:"images/07_kyo.png",        text:"凶…でも大丈夫！切り替えたら勝ち🤣", w:6 },
 
-      { key:"daikichi", label:"大吉", img:"images/02_daikichi.png", text:"大吉！素直に進めばいい感じ🌈" , w: 17 },
-      { key:"chukichi", label:"中吉", img:"images/03_chukichi.png", text:"中吉！焦らずコツコツが最強👍" , w: 17 },
-      { key:"shokichi", label:"小吉", img:"images/04_shokichi.png", text:"小吉！小さなラッキー見つけよ🍀" , w: 17 },
-      { key:"kichi",    label:"吉",   img:"images/05_kichi.png",    text:"安定の吉！自分のペースでOK😊" , w: 17 },
-      { key:"suekichi", label:"末吉", img:"images/06_suekichi.png", text:"末吉！あと一歩で良い流れくるよ✨" , w: 17 },
+      { key:"daikichi",   label:"大吉", img:"images/02_daikichi.png", text:"大吉！素直に進めばいい感じ🌈", w:17 },
+      { key:"chukichi",   label:"中吉", img:"images/03_chukichi.png", text:"中吉！焦らずコツコツが最強👍", w:17 },
+      { key:"shokichi",   label:"小吉", img:"images/04_shokichi.png", text:"小吉！小さなラッキー見つけよ🍀", w:17 },
+      { key:"kichi",      label:"吉",   img:"images/05_kichi.png",    text:"安定の吉！自分のペースでOK😊", w:17 },
+      { key:"suekichi",   label:"末吉", img:"images/06_suekichi.png", text:"末吉！あと一歩で良い流れくるよ✨", w:17 },
     ];
 
     function weightedPick(list){
@@ -225,15 +253,28 @@
       return list[list.length-1];
     }
 
+    function doFlash(){
+      flash.classList.remove("on");
+      void flash.offsetWidth;
+      flash.classList.add("on");
+    }
+
     function playFx(el){
-      el.classList.remove("show");
-      void el.offsetWidth; // 連続でも毎回発火
-      el.classList.add("show");
+      // 画像が読み込み途中だと出ないことがあるので、確実に見せる
+      el.style.display = "block";
+
+      el.classList.remove("on");
+      void el.offsetWidth;
+      el.classList.add("on");
     }
 
     function clearFx(){
-      happyFx.classList.remove("show");
-      boltFx.classList.remove("show");
+      if (fxTimer) { clearTimeout(fxTimer); fxTimer = null; }
+
+      flash.classList.remove("on");
+      happyFx.classList.remove("on");
+      boltFx.classList.remove("on");
+
       resultImage.classList.remove("shake");
       resultImage.style.visibility = "visible";
     }
@@ -241,35 +282,51 @@
     function showResult(data){
       clearFx();
 
-      // 先に結果をセット
+      // 結果をセット（先にセットしておく）
       resultImage.src = data.img;
       resultLabel.textContent = data.label;
       hitokoto.textContent = data.text;
-
       result.classList.add("show");
 
-      // 2枚連続表示：演出→カード
+      // 連打で演出が壊れないように一時停止
+      drawBtn.disabled = true;
+
+      // 2枚連続表示：演出 → カード
       if (data.key === "kyo"){
-        // ⚡ → 凶
+        // ⚡ → ピカッ → 凶カード（ブルブル）
         resultImage.style.visibility = "hidden";
         playFx(boltFx);
 
-        setTimeout(()=>{
+        // 稲妻の途中でピカッ
+        setTimeout(()=> doFlash(), 120);
+
+        fxTimer = setTimeout(()=>{
           resultImage.style.visibility = "visible";
-          // おまけ：凶だけブルブル
+
+          // ブルブル確実に再発火
           resultImage.classList.remove("shake");
           void resultImage.offsetWidth;
           resultImage.classList.add("shake");
-        }, 550);
+
+          drawBtn.disabled = false;
+        }, 650);
 
       } else if (data.key === "daidaikichi" || data.key === "umakuiku"){
-        // ✨ → カード
+        // 🎉 → ピカッ → カード
         resultImage.style.visibility = "hidden";
         playFx(happyFx);
 
-        setTimeout(()=>{
+        // キラキラの途中でピカッ
+        setTimeout(()=> doFlash(), 100);
+
+        fxTimer = setTimeout(()=>{
           resultImage.style.visibility = "visible";
-        }, 550);
+          drawBtn.disabled = false;
+        }, 650);
+
+      } else {
+        // 通常はそのまま
+        drawBtn.disabled = false;
       }
     }
 
@@ -285,6 +342,14 @@
       resultLabel.textContent = "結果";
       hitokoto.textContent = "";
       window.scrollTo({top:0, behavior:"smooth"});
+    });
+
+    // 画像ロードを少しでも安定させる（先読み）
+    window.addEventListener("load", ()=>{
+      [happyFx.src, boltFx.src].forEach(src=>{
+        const im = new Image();
+        im.src = src;
+      });
     });
   </script>
 </body>
